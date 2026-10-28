@@ -1,0 +1,13 @@
+[project]
+name = "clinica-veterinaria-api"
+version = "0.1.0"
+description = "API REST de la clínica veterinaria: registro de usuarios, mascotas y turnos"
+requires-python = ">=3.11"
+# Las dependencias de runtime y de pruebas están fijadas en requirements.txt,
+# que es la fuente de verdad usada por la imagen de Docker y por el entorno local.
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

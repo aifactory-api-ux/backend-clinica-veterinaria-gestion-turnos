@@ -1,0 +1,27 @@
+# Entorno virtual y cachés de Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Control de versiones y metadatos del sistema operativo
+.git/
+.gitignore
+.DS_Store
+
+# Configuración local y bases de datos de desarrollo
+.env
+.env.*
+*.db
+*.sqlite3
+
+# Documentación, pruebas y ficheros que no forman parte de la imagen
+README.md
+DEVELOPMENT_PLAN.md
+SPEC.md
+openspec/
+.opencode/
+tests/

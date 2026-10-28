@@ -1,0 +1,41 @@
+# Stack de la clínica veterinaria: la API y su base de datos PostgreSQL.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://clinica:clinica@db:5432/clinica
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clinica
+      POSTGRES_PASSWORD: clinica
+      POSTGRES_DB: clinica
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinica -d clinica"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

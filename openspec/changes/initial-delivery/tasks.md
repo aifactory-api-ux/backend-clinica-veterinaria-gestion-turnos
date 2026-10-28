@@ -1,0 +1,70 @@
+# Tasks
+
+All work below — implementation and tests alike — is carried out by the Developer agent; the delivery has no QA and no DevSec role, so every test in this list is written and run by the same agent that writes the code it covers. No task may run `docker build` or `docker compose up` (this environment has no Docker daemon); the container files are checked statically. The port `8202` is never used by any task.
+
+## 1. Project scaffolding and dependencies
+
+- [x] 1.1 Create `requirements.txt` with the runtime dependencies (`fastapi`, `uvicorn`, `sqlalchemy`, `psycopg[binary]`, `pydantic`, `python-jose`) and the test dependencies (`pytest`, `httpx`), and create `pyproject.toml` with the pytest configuration and the project metadata; verify that `pip install -r requirements.txt` succeeds and that `python -c "import fastapi, sqlalchemy, psycopg, jose, pytest, httpx"` exits with code 0.
+- [x] 1.2 Create the package skeleton `app/__init__.py`, `app/routers/__init__.py`, `app/services/__init__.py` and `tests/__init__.py`; verify that `python -c "import app"` exits with code 0 and that `pytest --collect-only` exits with code 0.
+- [x] 1.3 Extend `.gitignore` with the Python and tooling artefacts of this project (`.venv/`, `__pycache__/`, `.pytest_cache/`, `*.db`, `.env`); verify that `git status --short` lists no virtualenv, cache or database file.
+
+## 2. Configuration, database and models
+
+- [x] 2.1 Implement `app/config.py` (settings read from the environment: `DATABASE_URL`, `JWT_SECRET`, access-token lifetime) and `app/database.py` (engine, session factory, declarative `Base`, `get_db` dependency); verify that `python -c "from app.database import Base; print(sorted(Base.metadata.tables))"` prints `['appointments', 'pets', 'users']`.
+- [x] 2.2 Implement `app/models.py` with the `User`, `Pet` and `Appointment` models, the `UTCDateTime` type decorator and the uniqueness constraints (unique index on the normalised `email`, partial unique index on `(vet_id, start_at)` for rows with `status = 'scheduled'`, declared for SQLite and PostgreSQL); verify with `tests/test_models.py`, written in this task, that the schema is created on the test engine, that a user, a pet and an appointment round-trip preserve their UTC instants, and that the database refuses a second `scheduled` appointment for the same veterinarian in the same slot.
+- [x] 2.3 Implement `app/errors.py` with the domain errors and the HTTP status each maps to (`401`, `403`, `404`, `409`); verify that `python -c "from app.errors import DuplicateEmailError; print(DuplicateEmailError.status_code)"` prints `409` and that the error classes cover every status used by the specs.
+- [x] 2.4 Document in `README.md` the requirements, the project layout and how to run the API locally (install, environment variables, `uvicorn app.main:app --port 8000`); verify that every command and path mentioned in that section exists in the repository and that the uvicorn command uses port `8000`.
+
+## 3. Security and error primitives
+
+- [x] 3.1 Implement `app/security.py` with the PBKDF2-HMAC-SHA256 password hashing and verification and the HS256 JWT encoding and decoding (`sub`, `role`, `iat`, `exp`); verify with `tests/test_security.py`, written in this task, that a hash verifies against the correct password and rejects a wrong one, that two hashes of the same password differ because of the random salt, that a token decodes back to its payload, and that a token whose `exp` lies in the past is reported as expired.
+
+## 4. Application shell and health endpoint
+
+- [x] 4.1 Implement `app/main.py` (application factory, router wiring, exception handlers that translate the domain errors of `app/errors.py` into their status codes, and the startup that creates the schema) and `app/routers/health.py` with `GET /health`; verify with `tests/test_health.py`, written in this task, that `GET /health` answers `200` with exactly `{"status": "ok"}`, both without an `Authorization` header and with an invalid bearer token.
+- [x] 4.2 Add the health check to the `README.md` with a `curl` example; verify that the example uses `GET /health` and that the documented response matches the implemented one.
+
+## 5. Registration, login and token issuance
+
+- [x] 5.1 Implement the user schemas in `app/schemas.py` (`role` restricted to `client`/`vet`, password of at least 8 characters), the user service in `app/services/users.py` (creation with the normalised email and the duplicate check) and `POST /auth/register` in `app/routers/auth.py`; verify with the registration cases of `tests/test_auth.py`, written in this task, that a valid registration answers `201` with `{id, email, role}` and no password, a repeated email answers `409`, a 7-character password answers `422` and an unknown role answers `422`.
+- [x] 5.2 Implement `POST /auth/login` in `app/routers/auth.py` and the `get_current_user` dependency in `app/dependencies.py`; verify with the login and token cases of `tests/test_auth.py`, written in this task, that a valid login answers `200` with `access_token` and `token_type` equal to `bearer` and a JWT-shaped token, that a wrong password and an unknown email both answer `401` without an `access_token`, and that the dependency answers `401` for a missing header, a malformed token, a token signed with another secret and an expired token.
+- [x] 5.3 Add the registration, login and bearer-token examples to the `README.md`; verify that each example sends the documented fields and that the documented responses match the implemented status codes and bodies.
+
+## 6. Veterinarian directory
+
+- [x] 6.1 Implement the veterinarian listing in `app/services/users.py` and `GET /vets` in `app/routers/vets.py`; verify with `tests/test_vets.py`, written in this task, that the endpoint answers `200` with an array whose elements have exactly `id` and `email`, that no account with role `client` appears in it, and that the request without a token answers `401`.
+- [x] 6.2 Add the `GET /vets` example to the `README.md`; verify that the example uses a bearer token header and that the documented response matches the implemented one.
+
+## 7. Pet registry
+
+- [x] 7.1 Implement the pet schemas in `app/schemas.py` (`species` restricted to `dog`/`cat`/`other`, `birth_date` that cannot be in the future), the pet service in `app/services/pets.py` and the routes `POST /pets` and `GET /pets` in `app/routers/pets.py`; verify with `tests/test_pets.py`, written in this task, that a client answers `201` with `{id, name, species, birth_date, owner_id}`, that the three allowed species are accepted, that a veterinarian answers `403`, that the species `hamster` and a future birth date answer `422`, that the listing returns only the pets of the calling client, and that the request without a token answers `401`.
+- [x] 7.2 Add the `POST /pets` and `GET /pets` examples to the `README.md`; verify that the examples send the documented fields and that the documented responses match the implemented ones.
+
+## 8. Appointment slot rules and creation
+
+- [x] 8.1 Implement `app/services/scheduling.py` with `parse_start_at` (UTC ISO 8601 input), `validate_slot` (not in the past, Monday to Saturday, minutes `00` or `30`, start between `09:00` and `17:30` UTC inclusive) and `slot_end` (start plus 30 minutes); verify with `tests/test_scheduling.py`, written in this task, that a Sunday is rejected, that `10:15` is rejected, that `08:30` and `18:00` are rejected, that `17:30` is accepted with an end at `18:00`, and that a past instant is rejected.
+- [x] 8.2 Implement the appointment schemas in `app/schemas.py`, the appointment service in `app/services/appointments.py` (availability check over the veterinarian's active appointments, creation) and `POST /appointments` in `app/routers/appointments.py`, applying the check order of the design (role, pet existence, pet ownership, veterinarian existence, slot rules, availability); verify with the creation cases of `tests/test_appointments.py`, written in this task, that the endpoint answers `201` with `{id, pet_id, vet_id, start_at, end_at, status: "scheduled"}` and an end time 30 minutes after the start, that a veterinarian answers `403`, that a pet of another client answers `403`, that an unknown pet and an unknown veterinarian answer `404`, and that a slot already taken by the veterinarian answers `409`.
+- [x] 8.3 Add the `POST /appointments` example to the `README.md`; verify that the example sends `pet_id`, `vet_id` and a UTC ISO 8601 `start_at` and that the documented response matches the implemented one.
+
+## 9. Appointment listing and cancellation
+
+- [x] 9.1 Implement `GET /appointments` in `app/routers/appointments.py` with the role-scoped query (the appointments of the client's own pets, or the appointments where the veterinarian is the caller); verify with the listing cases of `tests/test_appointments.py`, written in this task, that a client receives only the appointments of their pets, that a veterinarian receives only their own appointments, and that the request without a token answers `401`.
+- [x] 9.2 Implement the cancellation in `app/services/appointments.py` and `POST /appointments/{id}/cancel` in `app/routers/appointments.py`; verify with the cancellation cases of `tests/test_appointments.py`, written in this task, that the owner of the pet and the veterinarian of the appointment each receive `200` with `status` equal to `cancelled`, that an unrelated user receives `403`, that an unknown identifier receives `404`, that cancelling an already cancelled appointment receives `409`, and that the freed slot can be booked again with `201`.
+- [x] 9.3 Add the `GET /appointments` and `POST /appointments/{id}/cancel` examples to the `README.md`; verify that the examples send the documented fields and that the documented responses match the implemented ones.
+
+## 10. Container runtime
+
+- [x] 10.1 Create the root `Dockerfile` (a `python:3.11-slim` image that installs `requirements.txt`, copies the `app/` package and starts `uvicorn app.main:app --host 0.0.0.0 --port 8000`) and the root `.dockerignore`; verify statically that every source path referenced by a `COPY` instruction exists in the repository (`requirements.txt` and `app/`) and that no instruction publishes port `8202`; do not run `docker build`.
+- [x] 10.2 Create the root `docker-compose.yml` with an `api` service built from the root `Dockerfile` and a `db` service running `postgres:16-alpine` with a named volume, a `pg_isready` healthcheck and `depends_on: {db: {condition: service_healthy}}`, wiring `DATABASE_URL` and `JWT_SECRET` into the API; verify statically that the file parses as YAML, that it declares the services `api` and `db`, that the `api` service publishes port `8000` and that no port `8202` appears; do not run `docker compose up`.
+- [x] 10.3 Document in `README.md` how to run the stack with Docker Compose (build and start commands, environment variables, published port `8000`) next to the local run; verify that the documented commands, service names and environment variables match the `Dockerfile` and `docker-compose.yml` of the repository.
+
+## 11. Integration verification
+
+- [x] 11.1 Run the whole suite with `pytest -q` and verify that every test passes with no errors and no warnings that hide a failure.
+- [x] 11.2 Start the API locally in the background with `DATABASE_URL` pointing at a local SQLite file and `uvicorn app.main:app --port 8000`, capture its PID with `$!`, verify that `GET /health` answers `200` with `{"status": "ok"}` and that `GET /vets` without a token answers `401`, and then stop the server with `kill $PID` on that recorded PID only (never by name or pattern, never on port `8202`).
+- [x] 11.3 Review every requirement of `specs/` against the suite and against the README, and verify that each of them has a covering test or an observable check, that every endpoint of the request has a `curl` example in the `README.md`, and that the `Dockerfile` and `docker-compose.yml` at the root match the container requirement (no automated test asserts the content of those files).
+
+## Workflow follow-up
+
+- Archive the change once the implementation is complete and reviewed.
+- Verify the archived result with `openspec validate initial-delivery --strict` before archiving, and re-check the archived specs afterwards.

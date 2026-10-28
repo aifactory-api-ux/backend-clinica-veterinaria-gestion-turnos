@@ -1,0 +1,25 @@
+# Entornos de Node
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# Entorno virtual de Python
+.venv/
+venv/
+
+# Bytecode y cachés de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Bases de datos locales
+*.db
+*.sqlite3
+
+# Variables de entorno
+.env
+.env.*
